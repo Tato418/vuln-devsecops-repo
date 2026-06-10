@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vulnerable-app-deployment
+  labels:
+    app: vulnerable-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vulnerable-app
+  template:
+    metadata:
+      labels:
+        app: vulnerable-app
+    spec:
+      # --- Vulnerabilities ---
+      # 1. Running as root: securityContext.runAsUser: 0
+      # This allows the container to run with root privileges, which is a security risk.
+      # 2. Lack of Resource Limits: No requests or limits defined.
+      # This can lead to resource exhaustion (CPU/memory) on the node.
+      # 3. Insecure Secret/ConfigMap Usage: Embedding sensitive data or easily guessable values.
+      # Here we use a ConfigMap for demonstration, which is not encrypted at rest by default.
+      containers:
+      - name: vulnerable-app
+        image: vulnerable-devsecops-app:latest # Image name will be built locally
+        ports:
+        - containerPort: 5000
+        securityContext:
+          runAsUser: 0 # Running as root
+        env:
+        - name: DUMMY_API_KEY_FROM_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: dummy_api_key
+      # Example ConfigMap to provide a secret via environment variable
+      # In a real scenario, use Kubernetes Secrets for actual sensitive data.
+      # The value here is intended to be the same as in app.py for consistency.
+      # This ConfigMap itself is not encrypted, and its values are visible.
+      volumes:
+      - name: app-config-volume
+        configMap:
+          name: app-config
+      # If we were mounting config as volume, we would use this:
+      # volumeMounts:
+      # - name: app-config-volume
+      #   mountPath: /etc/app/config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  # This should match the DUMMY_API_KEY in app.py for the env var to work
+  dummy_api_key: "super_secret_insecure_api_key_12345"
